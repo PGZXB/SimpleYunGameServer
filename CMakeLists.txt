@@ -6,6 +6,7 @@ project(YunGameServer)
 
 add_subdirectory(external/PGUtils)
 include_directories(external/PGUtils)
+include_directories(external/ConcurrentQueue)
 
 add_definitions(-DPGZXB_DEBUG)
 add_definitions(-D__STDC_FORMAT_MACROS)

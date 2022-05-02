@@ -1,0 +1,15 @@
+#ifndef PGZXB_YUNGAMESERVER_FWD_H
+#define PGZXB_YUNGAMESERVER_FWD_H
+
+#include "pg/pgfwd.h"
+#include "pg/pgfmt.h"
+
+#define PGYGS_NAMESPACE_START PGZXB_ROOT_NAMESPACE_START namespace ygs {
+#define PGYGS_NAMESPACE_END } PGZXB_ROOT_NAMESPACE_END
+
+PGYGS_NAMESPACE_START
+
+using ResourceID = int;
+
+PGYGS_NAMESPACE_END
+#endif

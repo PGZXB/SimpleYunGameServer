@@ -1,3 +1,6 @@
 [submodule "external/PGUtils"]
 	path = external/PGUtils
 	url = https://github.com/PGZXB/PGUtils.git
+[submodule "external/ConcurrentQueue"]
+	path = external/ConcurrentQueue
+	url = https://github.com/cameron314/concurrentqueue.git
