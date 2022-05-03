@@ -10,8 +10,8 @@ PGYGS_NAMESPACE_START
 class GameObjectController;
 
 class GameObject {
-    using OBB = OBB<int>;
-    using Vec2 = Vec2<int>;
+    using OBB = ygs::OBB<int>;
+    using Vec2 = ygs::Vec2<int>;
 public:
     enum State : std::uint8_t {
         DEFAULT,
@@ -36,7 +36,7 @@ public:
         return *this;
     }
 
-    const OBB &obb() const {
+    OBB &obb() {
         return obb_;
     }
 
@@ -45,11 +45,11 @@ public:
         return *this;
     }
 
-    const Vec2 &velocity() const {
+    Vec2 &velocity() {
         return velocity_;
     }
 
-    GameObject &setVelocity(const Vec2 &v) {
+    GameObject &set_velocity(const Vec2 &v) {
         velocity_ = v;
         return *this;    
     }

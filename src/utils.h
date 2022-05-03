@@ -1,15 +1,23 @@
 #ifndef PGZXB_YUNGAMESERVER_UTILS_H
 #define PGZXB_YUNGAMESERVER_UTILS_H
 
-#include "fwd.h"
 #include <cstdint>
 #include "concurrentqueue.h"
+
+#include "fwd.h"
 PGYGS_NAMESPACE_START
 
 template <typename T>
 struct Vec2 {
     T x{0};
     T y{0};
+
+    template <typename D>
+    Vec2 &operator+= (const Vec2<D>& a) {
+        x += a.x;
+        y += a.y;
+        return *this;
+    }
 };
 
 template <typename T>
@@ -47,6 +55,11 @@ enum Event {
     DEFINE_KEY_EVENTS(A,     1 << 12, 1 << 13),
     DEFINE_KEY_EVENTS(D,     1 << 14, 1 << 15),
     DEFINE_KEY_EVENTS(SPACE, 1 << 16, 1 << 17),
+
+    // Game control event
+    START_GAME = 1 << 18,
+    PAUSE_GAME = 1 << 19,
+    END_GAME = 1 << 20,
 };
 
 }; // namespace Event
@@ -55,6 +68,28 @@ enum Event {
 using EventQueue = moodycamel::ConcurrentQueue<Event::Event>;
 
 constexpr const std::size_t DOUBLE2INT_FACTOR = 1000;
+constexpr const std::size_t FPS = 60;
+
+inline Json make_response_json_data(ErrCode err_code, const Json &data) {
+    // {
+    //     "code": <code:int>,
+    //     "msg": "msg",
+    //     "data": json-object
+    // }
+    Json resp /* Json::object() */;
+    resp["code"] = (int)err_code;
+    resp["msg"] = err_code_to_zhCN_str(err_code); // FIXME: Only support zh-CN now
+    resp["data"] = data;
+    return resp;
+}
+
+inline const std::string & get_assets_dir() {
+    static const std::string s =
+        "/home/pgzxb/Documents/DevWorkspace/2022SACourseWorkspace/"
+        "YunTankGame/YunGameServer/assets/";
+
+    return s;
+}
 
 PGYGS_NAMESPACE_END
 #endif
