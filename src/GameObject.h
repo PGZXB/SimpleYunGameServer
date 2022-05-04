@@ -3,11 +3,14 @@
 
 #include "fwd.h"
 #include "utils.h"
+#include "RenderOrder.h"
 #include <cstdint>
 #include <memory>
 PGYGS_NAMESPACE_START
 
+class GameObject;
 class GameObjectController;
+using GenRenderingOrdersCallback = std::function<std::vector<RenderOrder>(GameObject&)>;
 
 class GameObject {
     using AABB = ygs::AABB<int>;
@@ -94,6 +97,28 @@ public:
         return (T*)context_;
     }
 
+    std::vector<RenderOrder> to_rendering_orders() {
+        if (gen_rendering_orders_callback_) {
+            return gen_rendering_orders_callback_(*this);
+        }
+        RenderOrder order;
+        order.code = RenderOrder::Code::DRAW;
+        const auto &aabb = this->aabb();
+        order.args = {
+            this->surface_img_id(),
+            aabb.area_.top_left.x,
+            aabb.area_.top_left.y,
+            aabb.area_.width,
+            aabb.area_.height,
+            (int)(aabb.theta_ * DOUBLE2INT_FACTOR),
+        };
+        return {order,};
+    }
+
+    void set_gen_rendering_orders_callback(const GenRenderingOrdersCallback &func) {
+        gen_rendering_orders_callback_ = func;
+    }
+
     void push_event(Event::Event event) {
         event_queue_.enqueue(event);
     }
@@ -117,6 +142,7 @@ private:
     std::shared_ptr<GameObjectController> controller_{nullptr};
     EventQueue event_queue_;
     void *context_{nullptr};
+    GenRenderingOrdersCallback gen_rendering_orders_callback_{nullptr};
 };
 
 PGYGS_NAMESPACE_END

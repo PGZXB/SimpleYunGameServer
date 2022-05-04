@@ -161,7 +161,8 @@ private:
                 for (auto i = game_object_list.begin(); i != game_object_list.end(); ++i) {
                     for (auto j = i; j != game_object_list.end(); ++j) {
                         if (*i == *j) continue;
-                        if ((*i)->aabb().intersect((*j)->aabb())) {
+                        // if ((*i)->aabb().intersect((*j)->aabb())) {
+                        if ((*i)->aabb().area_.intersect((*j)->aabb().area_)) {
                             collision_relations[(*i)->id()].push_back(*j);
                             collision_relations[(*j)->id()].push_back(*i);
                         }
@@ -207,18 +208,8 @@ private:
                     RenderOrder{RenderOrder::Code::CLEAR, {}},
                 };
                 for (auto &e : game_object_list) {
-                    RenderOrder order;
-                    order.code = RenderOrder::Code::DRAW;
-                    const auto &aabb = e->aabb();
-                    order.args = {
-                        e->surface_img_id(),
-                        aabb.area_.top_left.x,
-                        aabb.area_.top_left.y,
-                        aabb.area_.width,
-                        aabb.area_.height,
-                        (int)(aabb.theta_ * DOUBLE2INT_FACTOR),
-                    };
-                    orders.push_back(order);
+                    auto e_orders = e->to_rendering_orders();
+                    orders.insert(orders.end(), e_orders.begin(), e_orders.end());
                 }
                 {
                     PGZXB_DEBUG_ASSERT(game->display_callback_);

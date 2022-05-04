@@ -17,7 +17,6 @@
 
         var ws = new WebSocket("ws://127.0.0.1:8899");
         ws.onopen = function (evt) {
-            // console.log("Connection open ...");
             ws.send("C PGZXB R002 tank_game"); // FIXME: FIX
             ws.send("S"); // FIXME: FIX
         };
@@ -35,7 +34,6 @@
                 for (var e of arr) {
                     g_res_map[e.id] = e.path;
                 }
-                console.log(g_res_map)
             }
 
             if (data.orders !== undefined && data.orders instanceof Array) {
@@ -48,7 +46,6 @@
                     const args = e.args;
                     if (op === 'C') {
                     } else if (op === 'D') {
-                        console.log(args);
                         if (args[0] !== -1) {
                             const img = new Image();
                             img.src = "http://127.0.0.1:8899/" + g_res_map[args[0]];
@@ -73,7 +70,6 @@
             }
         };
         ws.onclose = function (evt) {
-            // console.log("Connection closed.");
         };
 
         // DEFINE_KEY_EVENTS(UP,    1 << 0 , 1 << 1 ),

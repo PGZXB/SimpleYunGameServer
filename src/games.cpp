@@ -1,5 +1,6 @@
 #include "games.h"
 #include "Game.h"
+#include "RenderOrder.h"
 #include "Resource.h"
 #include <cstddef>
 #include <memory>
@@ -13,6 +14,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
     constexpr const std::size_t TANK_SPEED = 5;
     constexpr const std::size_t BULLET_WIDTH_HEIGHT = 5;
     constexpr const std::size_t BULLET_SPEED = 20;
+    constexpr const std::size_t A_WALL_WIDTH_HEIGHT = 50;
     constexpr const std::size_t BACKGROUND_WIDTH = 800;
     constexpr const std::size_t BACKGROUND_HEIGHT = 600;
     constexpr const std::size_t DEFAULT_NPC_CNT = 3;
@@ -21,6 +23,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
     constexpr const ResourceID PLAYER_BULLET_RES_ID = 2;
     constexpr const ResourceID NPC_TANK_RES_ID = 3;
     constexpr const ResourceID NPC_BULLET_RES_ID = 4;
+    constexpr const ResourceID WALL_RES_ID = 5;
 
     enum class GOType : int {
         PLAYER_TANK,
@@ -38,6 +41,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
     res_mgr.force_create_object(PLAYER_BULLET_RES_ID, PLAYER_BULLET_RES_ID, "tankgame_player_tank_bullet.gif");
     res_mgr.force_create_object(NPC_TANK_RES_ID,      NPC_TANK_RES_ID,      "tankgame_npc_tank.gif"          );
     res_mgr.force_create_object(NPC_BULLET_RES_ID,    NPC_BULLET_RES_ID,    "tankgame_npc_tank_bullet.gif"   );
+    res_mgr.force_create_object(WALL_RES_ID,          WALL_RES_ID,          "tankgame_wall.gif"              );
 
     std::shared_ptr<GameObjectController> player_tank_controller = std::make_shared<GameObjectController>();
     std::shared_ptr<GameObjectController> bullet_controller = std::make_shared<GameObjectController>();
@@ -202,6 +206,42 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
             .set_controller(npc_tank_controller);
         return npc;
     });
+    go_creator_mgr.force_create_object("wall", []() {
+        auto wall = std::make_shared<GameObject>();
+        auto gen_wall_render_orders = [](GameObject& obj) {
+            // PGZXB_DEBUG_ASSERT((int)obj.aabb().theta_ == 270);
+            const auto [top_left, width, height] = obj.aabb().area_;
+            const auto [startx, starty] = top_left;
+            const auto rows = height / A_WALL_WIDTH_HEIGHT;
+            const auto cols = width  / A_WALL_WIDTH_HEIGHT;
+
+            std::vector<RenderOrder> orders;
+            for (std::size_t i = 0; i < cols; ++i) {
+                for (std::size_t j = 0; j < rows; ++j) {
+                    RenderOrder order;
+                    order.code = RenderOrder::Code::DRAW;
+                    order.args = {
+                        WALL_RES_ID,
+                        (int)(startx + i * A_WALL_WIDTH_HEIGHT),
+                        (int)(starty + j * A_WALL_WIDTH_HEIGHT),
+                        A_WALL_WIDTH_HEIGHT,
+                        A_WALL_WIDTH_HEIGHT,
+                        (int)(obj.aabb().theta_ * DOUBLE2INT_FACTOR),
+                    };
+                    orders.push_back(order);
+                }
+            }
+
+            return orders;
+        };
+        wall->set_type(GOType::WALL)
+            .set_surface_img_id(WALL_RES_ID)
+            .set_velocity(Vec2<int>{0, 0})
+            .set_aabb(AABB<int>{Rect<int>{Point<int>{0, 0}, A_WALL_WIDTH_HEIGHT, A_WALL_WIDTH_HEIGHT}, 270})
+            .set_controller(nullptr)
+            .set_gen_rendering_orders_callback(gen_wall_render_orders);
+        return wall;
+    });
 
     GameObject background_object;
     background_object.set_type(GOType::BACKGROUND)
@@ -224,6 +264,74 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
     tank_game->set_background(std::move(background_object));
     tank_game->set_game_object_creator_mgr(go_creator_mgr);
 
+    // Gen Wall
+    auto gen_wall = [tank_game](int x, int y, int m, int n) { // (x, y), mxn
+        tank_game->run_in_game_loop([tank_game, x, y, m, n]() {
+            std::function<std::shared_ptr<GameObject>()> *pCreator{nullptr};
+            auto found = tank_game->game_object_creator_mgr().try_lookup_object("wall", &pCreator);
+            PGZXB_DEBUG_ASSERT(found);
+            PGZXB_DEBUG_ASSERT(pCreator && *pCreator);
+            auto wall = (*pCreator)();
+            wall->set_aabb(
+                AABB<int>{ // bounding box
+                    Rect<int>{
+                        {x, y},
+                        (int)(n * A_WALL_WIDTH_HEIGHT), // width
+                        (int)(m * A_WALL_WIDTH_HEIGHT), // height
+                    }, 
+                    0 // theta
+                }
+            );
+            tank_game->add_game_object(wall);
+        });
+    };
+    // ┌────────────────────────────────────────────────────────────────────────────────┐
+    // │                                                                                │
+    // │                                                                                │
+    // │        ┌───────────┐               ┌─────┐                                     │
+    // │        │           │               │     │                                     │
+    // │        │           │               │     │                                     │
+    // │        │    ┌──────┘               │     │         ┌─────────────────┐         │
+    // │        │    │                      │     │         │                 │         │
+    // │        │    │                      │     │         │                 │         │
+    // │        │    │                      │     │         └───────────┐     │         │
+    // │        │    │                      │     │                     │     │         │
+    // │        │    │                      │     │                     │     │         │
+    // │        │    │              ┌───────┘     │                     │     │         │
+    // │        │    │              │             │                     │     │         │
+    // │        │    │              │             │       ┌──────┐      │     │         │
+    // │        │    │              └───────┐     │       │      │      │     │         │
+    // │        │    │                      │     │       │      │      │     │         │
+    // │        │    │                      │     │       │      │      │     │         │
+    // │        │    │                      │     │       └──────┘      │     │         │
+    // │        │    │     ┌─────┐          │     │                     │     │         │
+    // │        │    │     │     │          │     │                     │     │         │
+    // │        │    │     │     │          │     │                     │     │         │
+    // │        │    │     └─────┘          │     │                     │     │         │
+    // │        │    │                      │     │                     │     │         │
+    // │        │    │                      │     │                     │     │         │
+    // │        └────┘                      └─────┘                     └─────┘         │
+    // │                                                                                │
+    // │                                                                                │
+    // └────────────────────────────────────────────────────────────────────────────────┘
+    const int MAP[][4] = {
+        {80,  180, 7, 1},
+        {130, 180, 1, 1},
+        {230, 480, 1, 1},
+        {330, 380, 1, 1},
+        {380, 180, 7, 1},
+        {530, 400, 1, 1},
+        {630, 180, 1, 3},
+        {730, 130, 5, 1},
+    };
+    const auto WALL_CNT = std::size(MAP);
+
+    for (std::size_t i = 0; i < WALL_CNT; ++i) {
+        auto &w = MAP[i];
+        gen_wall(w[0], w[1], w[2], w[3]);
+    }
+
+    // Gen NPC Tanks
     for (std::size_t i = 0; i < DEFAULT_NPC_CNT; ++i) {
         tank_game->run_in_game_loop([tank_game]() {
             std::function<std::shared_ptr<GameObject>()> *pCreator{nullptr};
