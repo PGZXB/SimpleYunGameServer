@@ -24,20 +24,31 @@ public:
         const WebSocketChannelPtr &owner_wschannel)
      : id_(id), game_(game), owner_id_(owner_id), owner_wschannel_(owner_wschannel) {
         member_wschannels_[owner_id] = owner_wschannel;
+    }
+
+    std::shared_ptr<GameObject> init() {
         game_->set_display_callback([this](const std::vector<RenderOrder> &orders){
-            std::string orders_str;
+            Json resp_data;
+            auto &orders_json = (resp_data["orders"] = Json::array());
             for (const auto &e : orders) {
-                orders_str.append(e.stringify()).append(";");
+                orders_json.push_back(e.to_json());
             }
-            // PGYGS_LOG("Display orders: {0}", orders_str);
+            auto resp_json = make_response_json_data(ErrCode::SUCCESS, resp_data);
+            std::string json_str = resp_json.dump();
             for (auto &[id, chann] : member_wschannels_) {
-                chann->send(orders_str);
+                if (chann) {
+                    chann->send(json_str);
+                } else {
+                    PGYGS_LOG("nullptr chann",1);
+                }
             }
         });
         auto player_creator = game_->game_object_creator_mgr().lookup_object("player");
         PGZXB_DEBUG_ASSERT(player_creator);
-        game_->add_game_object(player_creator());
+        auto owner_go = player_creator();
+        game_->add_game_object(owner_go);
         game_->init();
+        return owner_go;
     }
 
     bool add_member(const std::string &id, const WebSocketChannelPtr &channel) {
@@ -73,6 +84,10 @@ public:
         obj["member_ids"] = members;
 
         return obj;
+    }
+
+    const std::string &id() const {
+        return id_;
     }
 
     std::shared_ptr<Game> game() const {

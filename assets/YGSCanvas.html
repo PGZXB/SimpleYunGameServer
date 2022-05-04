@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>YGS</title>
+</head>
+
+<body>
+
+    <canvas id="myCanvas" width="800" height="600" style="border:1px solid #c3c3c3;">
+    </canvas>
+
+    <script>
+        const g_res_map = {}
+        const myCanvas = document.getElementById("myCanvas");
+
+        var ws = new WebSocket("ws://127.0.0.1:8899");
+        ws.onopen = function (evt) {
+            // console.log("Connection open ...");
+            ws.send("C PGZXB R002 tank_game"); // FIXME: FIX
+            ws.send("S"); // FIXME: FIX
+        };
+        ws.onmessage = function (evt) {
+            const resp_data = JSON.parse(evt.data);
+
+            if (resp_data.code !== 0) {
+                alert(resp_data.msg);
+                return;
+            }
+
+            const data = resp_data.data;
+            if (data.resources !== undefined && data.resources instanceof Array) {
+                const arr = data.resources;
+                for (var e of arr) {
+                    g_res_map[e.id] = e.path;
+                }
+                console.log(g_res_map)
+            }
+
+            if (data.orders !== undefined && data.orders instanceof Array) {
+                const myCanvas = document.getElementById("myCanvas");
+                const canvas_ctx = myCanvas.getContext("2d");
+
+                const orders = data.orders;
+                for (var e of orders) {
+                    const op = e.op;
+                    const args = e.args;
+                    if (op === 'C') {
+                    } else if (op === 'D') {
+                        console.log(args);
+                        if (args[0] !== -1) {
+                            const img = new Image();
+                            img.src = "http://127.0.0.1:8899/" + g_res_map[args[0]];
+                            img.onload = () => {
+                                const width = args[3];
+                                const height = args[4];
+                                const center_xpos = args[1] + width / 2;
+                                const center_ypos = args[2] + height / 2;
+                                canvas_ctx.save();
+                                canvas_ctx.translate(center_xpos, center_ypos);
+                                canvas_ctx.rotate((args[5] / 1000 + 90) * Math.PI / 180);
+                                canvas_ctx.translate(-center_xpos, -center_ypos);
+                                canvas_ctx.drawImage(img, center_xpos - width/ 2, center_ypos - height / 2, width, height);
+                                canvas_ctx.restore();
+                            };
+                        }
+                    } else {
+                        alert('Invalid order' + e);
+                    }
+                }
+
+            }
+        };
+        ws.onclose = function (evt) {
+            // console.log("Connection closed.");
+        };
+
+        // DEFINE_KEY_EVENTS(UP,    1 << 0 , 1 << 1 ),
+        // DEFINE_KEY_EVENTS(DOWN,  1 << 2 , 1 << 3 ),
+        // DEFINE_KEY_EVENTS(LEFT,  1 << 4 , 1 << 5 ),
+        // DEFINE_KEY_EVENTS(RIGHT, 1 << 6 , 1 << 7 ),
+        // DEFINE_KEY_EVENTS(W,     1 << 8 , 1 << 9 ),
+        // DEFINE_KEY_EVENTS(S,     1 << 10, 1 << 11),
+        // DEFINE_KEY_EVENTS(A,     1 << 12, 1 << 13),
+        // DEFINE_KEY_EVENTS(D,     1 << 14, 1 << 15),
+        // DEFINE_KEY_EVENTS(SPACE, 1 << 16, 1 << 17),
+
+        window.onkeydown = e => {
+            if (e && e.keyCode == 87) { // W
+                ws.send('I ' + (1 << 8).toString());
+            }
+            if (e && e.keyCode == 83) { // S
+                ws.send('I ' + (1 << 10).toString());
+            }
+            if (e && e.keyCode == 65) { // A
+                ws.send('I ' + (1 << 12).toString());
+            }
+            if (e && e.keyCode == 68) { // D
+                ws.send('I ' + (1 << 14).toString());
+            }
+            if (e && e.keyCode == 32) { // D
+                ws.send('I ' + (1 << 16).toString());
+            }
+        };
+
+        // ctx.fillStyle = "#FF0000";
+        // ctx.fillRect(0, 0, 150, 75);
+
+    </script>
+
+</body>
+
+</html>

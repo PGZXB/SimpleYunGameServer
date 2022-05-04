@@ -25,6 +25,13 @@ struct RenderOrder {
         }
         return res;
     }
+
+    Json to_json() const {
+        Json res;
+        res["op"] = CODE2STRING[(int)code];
+        res["args"] = args;
+        return res;
+    }
 };
 
 PGYGS_NAMESPACE_END

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "fwd.h"
+#include "pg/pgfwd.h"
 #include "utils.h"
 #include "ObjectMgr.h"
 #include "Resource.h"
@@ -42,12 +43,13 @@ public:
     }
 
     void init() {
-        game_object_list_.push_back(std::shared_ptr<GameObject>(&backgound_go_, [](GameObject*){}));
+        backgound_go_.set_id(game_object_counter_++);
+        game_object_list_.push_front(std::shared_ptr<GameObject>(&backgound_go_, [](GameObject*){}));
         game_loop_th_ = std::thread(game_loop, shared_from_this());
     }
 
     ~Game() {
-        state_ = State::OVER;
+        push_event(Event::END_GAME);
         if (game_loop_th_.joinable()) {
             game_loop_th_.join();
         }
@@ -73,13 +75,23 @@ public:
         event_queue_.enqueue(event);
     }
 
+    void run_in_game_loop(const std::function<void()> &task) {
+        pending_tasks_.enqueue(task);        
+    }
+
     void add_game_object(std::shared_ptr<GameObject> obj) {
+        // Check: must in loop
         std::lock_guard<std::mutex> _(mu_);
+        obj->set_id(game_object_counter_++);
         game_object_list_.push_back(obj);
     }
     
-    void set_background(GameObject obj) {
-        backgound_go_ = obj;
+    void set_background(GameObject&& obj) {
+        backgound_go_ = std::move(obj);
+    }
+
+    const GameObject &background() const {
+        return backgound_go_;
     }
 
     void set_event_processor(const ProcessEventCallback &callback) {
@@ -106,6 +118,11 @@ public:
     GameObjectCreatorMgr &game_object_creator_mgr() {
         return go_creator_mgr_;
     }
+
+    const std::string &id() const {
+        return id_;
+    }
+
 private:
     static void game_loop(std::shared_ptr<Game> game) {
         PGZXB_DEBUG_ASSERT(game);
@@ -138,24 +155,48 @@ private:
             
             // OnRunning: Tick & Collision checking & Remove dead GOs
             if (game->state_ == State::RUNNING) {
+                // Collision checking & Processing
+                // (Get CollisionProcessingTask of controller of GO -> Launch them to thread-pool)
+                std::vector<std::vector<std::shared_ptr<GameObject>>> collision_relations(game->game_object_counter_);
+                for (auto i = game_object_list.begin(); i != game_object_list.end(); ++i) {
+                    for (auto j = i; j != game_object_list.end(); ++j) {
+                        if (*i == *j) continue;
+                        if ((*i)->aabb().intersect((*j)->aabb())) {
+                            collision_relations[(*i)->id()].push_back(*j);
+                            collision_relations[(*j)->id()].push_back(*i);
+                        }
+                    }
+                }
+
                 // Tick all game-objects
                 // (Get tick-tasks of controller of GO -> Launch them to thread-pool)
                 for (auto &e : game_object_list) {
                     PGZXB_DEBUG_ASSERT(e);
                     if (auto controller = e->controller()) {
-                        auto tick_task = controller->tick_task();
-                        tick_task(game, e, events); // FIXME: Temp
+                        auto game_obj_events = events | e->all_events();
+                        if (auto &cr = collision_relations[e->id()]; !cr.empty()) {
+                            game_obj_events |= Event::COLLISION;
+                            e->set_context(&cr);
+                        }
+                        const auto &tick_task = controller->tick_task();
+                        tick_task(game, e, game_obj_events); // FIXME: Temp
                     }
                 }
-                // Collision checking & Processing
-                // (Get CollisionProcessingTask of controller of GO -> Launch them to thread-pool)
-                // TODO: TODO
 
                 // Remove dead GOs
                 for (auto iter = game_object_list.begin(); iter != game_object_list.end(); ++iter) {
                     if ((*iter)->dead()) {
                         iter = game_object_list.erase(iter);
                     }
+                }
+            }
+
+            // Running pending tasks
+            {
+                auto size = game->pending_tasks_.size_approx();
+                std::function<void()> task;
+                while (size-- && game->pending_tasks_.try_dequeue(task)) {
+                    if (task) task();
                 }
             }
 
@@ -168,14 +209,14 @@ private:
                 for (auto &e : game_object_list) {
                     RenderOrder order;
                     order.code = RenderOrder::Code::DRAW;
-                    const auto &obb = e->obb();
+                    const auto &aabb = e->aabb();
                     order.args = {
                         e->surface_img_id(),
-                        obb.area_.top_left.x,
-                        obb.area_.top_left.y,
-                        obb.area_.width,
-                        obb.area_.height,
-                        (int)(obb.theta_ * DOUBLE2INT_FACTOR),
+                        aabb.area_.top_left.x,
+                        aabb.area_.top_left.y,
+                        aabb.area_.width,
+                        aabb.area_.height,
+                        (int)(aabb.theta_ * DOUBLE2INT_FACTOR),
                     };
                     orders.push_back(order);
                 }
@@ -185,8 +226,11 @@ private:
                 }
 
                 using namespace std::chrono_literals;
-                auto delay = 1000ms / FPS - (std::chrono::steady_clock::now() - start);
-                std::this_thread::sleep_for(delay);
+                constexpr const auto need_delay = 1000ms / FPS;
+                const auto true_delay = std::chrono::steady_clock::now() - start;
+                if (true_delay < need_delay) {
+                    std::this_thread::sleep_for(need_delay - true_delay);
+                }
             }
         }
     }
@@ -239,6 +283,8 @@ private:
     EventQueue event_queue_;
     Resource::Mgr resouce_mgr_;
     GameObjectCreatorMgr go_creator_mgr_;
+    TaskQueue pending_tasks_;
+    int game_object_counter_{0};
 };
 
 PGYGS_NAMESPACE_END

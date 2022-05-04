@@ -10,6 +10,7 @@ using namespace pg::ygs;
 
 int main() {
     PGZXB_DEBUG_Print("Starting YunGameServer ---");
+    std::srand(std::time(nullptr));
 
     hv::HttpService http;
     hv::WebSocketService ws;
@@ -17,6 +18,7 @@ int main() {
     YGSContext ygs_ctx;
     ygs_ctx.game_creator_mgr.force_create_object("tank_game", examples::create_tank_game);
 
+    http.document_root = get_assets_dir();
     http.GET("/api/v1/rooms", api::v1::new_GET_get_rooms_router(&ygs_ctx.room_mgr));
     http.GET("/api/v1/games", api::v1::new_GET_get_games_router(&ygs_ctx.game_creator_mgr));
     ws = api::v1::new_websocket_service(&ygs_ctx);

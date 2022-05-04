@@ -8,6 +8,7 @@ namespace api::v1 {
 struct YGSWSContext { // YunGameServer WebSocket Context
     std::string user_id;
     Room *room{nullptr};
+    std::shared_ptr<GameObject> game_obj;
 };
 
 using ReqProcFuncArgs = std::vector<std::string>;
@@ -57,14 +58,17 @@ static bool registe_request_processing_table(ReqProcFuncTable &table) {
 
         ygs_ws_ctx->user_id = user_id;
         ygs_ws_ctx->room = &new_room;
+        ygs_ws_ctx->game_obj = new_room.init();
 
         const auto &res_mgr = new_game_ins->resouce_mgr();
+        Json json;
         Json res_arr = Json::array();
         for (const auto &[id, resource] : res_mgr) {
             PGZXB_UNUSED(id);
             res_arr.push_back(resource.to_json());
         }
-        auto resp_json = make_response_json_data(ErrCode::SUCCESS, res_arr);
+        json["resources"] = res_arr;
+        auto resp_json = make_response_json_data(ErrCode::SUCCESS, json);
         channel->send(resp_json.dump());
     };
 
@@ -93,6 +97,20 @@ static bool registe_request_processing_table(ReqProcFuncTable &table) {
     DEFINE_OP_GAME('P', PAUSE, pause);
     DEFINE_OP_GAME('E', END, stop);
 #undef DEFINE_OP_GAME
+
+    table['I' - 'A'] = [](YGSContext *ygs_ctx, const WebSocketChannelPtr &channel, const ReqProcFuncArgs &args) {
+        auto *ygs_ws_ctx = channel->getContext<YGSWSContext>();
+        if (!ygs_ws_ctx) {
+            auto resp_json = make_response_json_data(ErrCode::ROOM_NOT_FOUND, nullptr);
+            channel->send(resp_json.dump());
+            return;
+        }
+        
+        auto &go = ygs_ws_ctx->game_obj;
+        for (const auto &e : args) {
+            go->push_event((Event::Event)atoi(e.c_str()));
+        }
+    };
 
     table['R' - 'A'] = [](YGSContext *ygs_ctx, const WebSocketChannelPtr &channel, const ReqProcFuncArgs &args) {
         if (channel->context()) {
@@ -128,6 +146,16 @@ static bool registe_request_processing_table(ReqProcFuncTable &table) {
         auto *ygs_ws_ctx = channel->newContext<YGSWSContext>();
         ygs_ws_ctx->user_id = user_id;
         ygs_ws_ctx->room = pRoom;
+
+        const auto &res_mgr = pRoom->game()->resouce_mgr();
+        Json json = Json::object(), res_arr = Json::array();
+        for (const auto &[id, resource] : res_mgr) {
+            PGZXB_UNUSED(id);
+            res_arr.push_back(resource.to_json());
+        }
+        json["resources"] = res_arr;
+        auto resp_json = make_response_json_data(ErrCode::SUCCESS, json);
+        channel->send(resp_json.dump());
     };
 
     return std::rand() % 2;
@@ -177,11 +205,21 @@ hv::WebSocketService new_websocket_service(YGSContext *ygs_ctx) {
         // Pause game:  "P",                         Response-data: null
         // End game:    "E",                         Response-data: null
         // enter Room:  "R User-ID Room-ID",         Response-data: [{"id":, "url":},...] (resources)
+        // Input:       "I keycode",                 Don't responce
         process_request(ygs_ctx, channel, msg);
     };
 
-    ws.onclose = [](const WebSocketChannelPtr& channel) {
+    ws.onclose = [ygs_ctx](const WebSocketChannelPtr& channel) {
         PGYGS_LOG("Close WebSocket connection(from=\"{0}\")", channel->peeraddr());
+        if (channel->context()) {
+            auto *ygs_ws_ctx = channel->getContext<YGSWSContext>();
+            if (ygs_ws_ctx->user_id == ygs_ws_ctx->room->owner_id()) {
+                auto removed = ygs_ctx->room_mgr.try_remove_object(ygs_ws_ctx->room->id());
+                PGZXB_DEBUG_ASSERT(removed);
+                removed = ygs_ctx->game_mgr.try_remove_object(ygs_ws_ctx->room->game()->id());
+                PGZXB_DEBUG_ASSERT(removed);
+            }
+        }
     };
     return ws;
 }
