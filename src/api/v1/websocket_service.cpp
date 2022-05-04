@@ -125,7 +125,7 @@ static bool registe_request_processing_table(ReqProcFuncTable &table) {
         }
 
         const auto &user_id = args[0];
-        const auto &room_id = args[0];
+        const auto &room_id = args[1];
         auto &room_mgr = ygs_ctx->room_mgr;
 
         // Check room_id
