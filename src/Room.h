@@ -77,6 +77,10 @@ public:
         return false;
     }
 
+    void set_game(std::shared_ptr<Game> game) {
+        game_ = game;
+    }
+
     Json to_json() const {
         // {
         //     "id": "some-id",
@@ -90,6 +94,7 @@ public:
         // }
         Json obj /* = Json::object() */;
         obj["id"] = id_;
+        obj["game_id"] = game_? game_->game_id() : "";
         obj["owner_id"] = owner_id_;
         auto members = Json::array();
         {

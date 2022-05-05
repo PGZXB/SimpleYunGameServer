@@ -6,19 +6,207 @@
     <title>YGS</title>
 </head>
 
-<body>
+<body onload="get_init_data()">
+    <table border="0">
+        <tr>
+            <td>
+                <canvas id="myCanvas" width="800" height="600" style="border:1px solid #c3c3c3;">
+                </canvas>
+            </td>
+            <td>
+                <table border="1">
+                    <tr>
+                        <td>
+                            <label>用户ID:</label>
+                            <input id="pgygs_user_id_input" type="text" value="">
+                        </td>
+                        <td>
+                            <button style="width: 100%; height: 100%;" onclick="req_start_or_pause_game()">开始/暂停游戏</button>
+                        </td>
+                        <td>
+                            <button style="width: 100%; height: 100%;" onclick="req_stop_game()">结束游戏</button>
+                        </td>
+                    </tr>
+                    <tr>
 
-    <canvas id="myCanvas" width="800" height="600" style="border:1px solid #c3c3c3;">
-    </canvas>
+                    </tr>
+                    <tr>
+                        <td>
+                            <label>游戏:</label>
+                            <select id="pgygs_game_creator_selector">
+                            </select>
+                        </td>
+                        <td>
+                            <label>房间ID:</label>
+                            <input id="pgygs_room_id_to_create_input" type="text" value="R001">
+                        </td>
+                        <td style="display:inline-block;">
+                            <button style="width: 100%; height: 100%;" onclick="req_create_room()">创建房间</button>
+                        </td>
+                    </tr>
+                    <tr id="enter_room_ui_group">
+                        <td>
+                            <label>房间:</label>
+                            <select id="pgygs_room_to_enter_selector">
+                            </select>
+                        </td>
+                        <td>
+                            <button style="width: 100%; height: 100%;" onclick="req_enter_room()">加入房间</button>
+                        </td>
+                        <td>
+                            <button style="width: 100%; height: 100%;" onclick="req_leave_room()">离开房间</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <label>房间:</label>
+                            <select id="pgygs_room_live_selector">
+                            </select>
+                        </td>
+                        <td>
+                            <button style="width: 100%; height: 100%;">观战</button>
+                        </td>
+                        <td>
+                            <button style="width: 100%; height: 100%;" onclick="get_init_data()">刷新</button>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <script>
+        const INIT = 1;
+        const ROOM_CREATED = 2;
+        const GAME_RUNNNIG = 3;
+        const GAME_PAUSE = 4;
+        const GAME_OVER = 5;
+        const IN_ROOM = 6;
         const g_res_map = {}
         const myCanvas = document.getElementById("myCanvas");
+        const ws = new WebSocket("ws://127.0.0.1:8899");
+        var state = INIT;
 
-        var ws = new WebSocket("ws://127.0.0.1:8899");
+        function check_and_get_text_input(input_id, err_msg) {
+            const input = document.getElementById(input_id);
+            const res = input.value;
+            if (res.length === 0) {
+                alert(err_msg);
+                return null
+            }
+            return res;
+        }
+
+        function check_and_get_selector_input(selector_id, err_msg) {
+            const input = document.getElementById(selector_id);
+            const index = input.selectedIndex;
+            const val = input.options[index].pgygs_origin_data;
+            if (val === undefined || val === null) {
+                alert(err_msg);
+                return null
+            }
+            return val;
+        }
+
+        function req_start_or_pause_game() {
+            console.log(state);
+            if (state === GAME_OVER) {
+                alert('暂不支持重新开始游戏, 请刷新页面重新创建房间');
+                // const game_id = check_and_get_selector_input('pgygs_game_creator_selector', '选择正确的游戏');
+                // if (game_id === null) return;
+                // ws.send(`G ${game_id}`);
+            } else if (state === ROOM_CREATED || state == GAME_PAUSE) {
+                ws.send('S;');
+                state = GAME_RUNNNIG;
+            } else if (state === GAME_RUNNNIG) {
+                ws.send('P;');
+                state = GAME_PAUSE;
+            } else {
+                alert('没有创建房间或不是房主;');
+            }
+        }
+
+        function req_stop_game() {
+            if (state == GAME_RUNNNIG || state == GAME_PAUSE) {
+                ws.send('E;');
+                state = GAME_OVER;
+            }
+        }
+
+        function req_enter_room() {
+            const user_id = check_and_get_text_input('pgygs_user_id_input', '请先指定用户ID');
+            if (user_id === null) return;
+            const room_id = check_and_get_selector_input('pgygs_room_to_enter_selector', '选择正确的房间')?.id;
+            if (room_id === null) return;
+            if (state == INIT) {
+                ws.send(`R ${user_id} ${room_id};`);
+                state = IN_ROOM;
+            } else if (confirm(`是否确认进入'${room_id}', 进入房间将自动离开当前房间(如果您是房主, 房间将销毁)`)) {
+                ws.send('0;');
+                ws.send(`R ${user_id} ${room_id};`);
+                state = IN_ROOM;
+            }
+        }
+
+        function req_leave_room() {
+            if (state == INIT) return;
+            if (confirm(`是否确认离开当前房间(如果您是房主, 房间将销毁)`)) {
+                ws.send('0;');
+                state = INIT;
+            }
+        }
+
+        function req_create_room() {
+            if (state !== INIT) return;
+            const user_id = check_and_get_text_input('pgygs_user_id_input', '请先指定用户ID');
+            if (user_id === null) return;
+            const room_id = check_and_get_text_input('pgygs_room_id_to_create_input', '房间ID不能为空');
+            if (room_id === null) return;
+            const game_id = check_and_get_selector_input('pgygs_game_creator_selector', '选择正确的游戏');
+            if (game_id === null) return;
+            ws.send(`C ${user_id} ${room_id} ${game_id}`);
+            state = ROOM_CREATED;
+        }
+
+        function req_data_and_add_to_selector(url, selector_id, to_string) {
+            axios.get(url)
+                .then(res => {
+                    const data = res.data;
+                    if (data.code !== 0) {
+                        alert(data.msg);
+                    } else {
+                        const games = data.data;
+                        const game_selector = document.getElementById(selector_id);
+                        for (var c of game_selector.childNodes) {
+                            game_selector.removeChild(c);
+                        }
+                        for (var e of games) {
+                            const option = document.createElement('option');
+                            option.innerText = to_string(e);
+                            option.pgygs_origin_data = e;
+                            game_selector.appendChild(option);
+                        }
+                    }
+                })
+                .catch(err => {
+                    alert('请求错误');
+                });
+        }
+
+        function get_init_data() {
+            const room2str = e => {
+                return e.id + "(" + e.game_id + ", Owner: " + e.owner_id + ")";
+            };
+
+            req_data_and_add_to_selector('api/v1/games', 'pgygs_game_creator_selector', e => { return e });
+            req_data_and_add_to_selector('api/v1/rooms', 'pgygs_room_to_enter_selector', room2str);
+            req_data_and_add_to_selector('api/v1/rooms', 'pgygs_room_live_selector', room2str);
+        }
+
         ws.onopen = function (evt) {
-            ws.send("C PGZXB R002 tank_game"); // FIXME: FIX
-            ws.send("S"); // FIXME: FIX
+            // ws.send("C PGZXB R002 tank_game"); // FIXME: FIX
+            // ws.send("S"); // FIXME: FIX
         };
         ws.onmessage = function (evt) {
             const resp_data = JSON.parse(evt.data);
@@ -58,7 +246,7 @@
                                 canvas_ctx.translate(center_xpos, center_ypos);
                                 canvas_ctx.rotate((args[5] / 1000 + 90) * Math.PI / 180);
                                 canvas_ctx.translate(-center_xpos, -center_ypos);
-                                canvas_ctx.drawImage(img, center_xpos - width/ 2, center_ypos - height / 2, width, height);
+                                canvas_ctx.drawImage(img, center_xpos - width / 2, center_ypos - height / 2, width, height);
                                 canvas_ctx.restore();
                             };
                         }
@@ -83,6 +271,8 @@
         // DEFINE_KEY_EVENTS(SPACE, 1 << 16, 1 << 17),
 
         window.onkeydown = e => {
+            if (state !== GAME_RUNNNIG && state !== IN_ROOM) return;
+
             if (e && e.keyCode == 87) { // W
                 ws.send('I ' + (1 << 8).toString());
             }

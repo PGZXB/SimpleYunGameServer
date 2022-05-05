@@ -42,6 +42,7 @@ enum class ErrCode : int {
     END_GAME_BUT_NOT_OWNER,
     ROOM_NOT_FOUND,
     MEMBER_ID_EXISTING,
+    NO_GAME,
 };
 
 inline const char *err_code_to_zhCN_str(ErrCode code) {
@@ -60,7 +61,8 @@ inline const char *err_code_to_zhCN_str(ErrCode code) {
         "只有房主可以暂停游戏",   // PAUSE_GAME_BUT_NOT_OWNER
         "只有房主可以结束游戏",   // END_GAME_BUT_NOT_OWNER
         "房间不存在",            // ROOM_NOT_FOUND
-        "成员ID已存在",
+        "成员ID已存在",          // MEMBER_ID_EXISTING
+        "没有正在运行的游戏",     // NO_GAME
     };
 
     return ZHCN_MSG_TABLE[(int)code];

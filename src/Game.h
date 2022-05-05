@@ -137,6 +137,10 @@ public:
         return id_;
     }
 
+    const std::string &game_id() const {
+        return game_id_;
+    }
+
 private:
     static void game_loop(std::shared_ptr<Game> game) {
         PGZXB_DEBUG_ASSERT(game);
@@ -282,8 +286,6 @@ private:
     }
 
     void force_clear() {
-        id_.clear();
-        game_id_.clear();
         backgound_go_ = {};
         game_object_list_.clear();
         event_processor_ = nullptr;

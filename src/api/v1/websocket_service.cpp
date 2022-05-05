@@ -74,7 +74,7 @@ static bool registe_request_processing_table(ReqProcFuncTable &table) {
         channel->send(resp_json.dump());
     };
 
-#define DEFINE_OP_GAME(opName, errPrefix, opFunc) \
+#define DEFINE_OP_GAME(opName, errPrefix, opFunc, extCode) \
     table[opName - 'A'] = [](YGSContext *ygs_ctx, const WebSocketChannelPtr &channel, const ReqProcFuncArgs &args) { \
         auto *ygs_ws_ctx = channel->getContext<YGSWSContext>(); \
         if (!ygs_ws_ctx) { \
@@ -85,7 +85,12 @@ static bool registe_request_processing_table(ReqProcFuncTable &table) {
         if (ygs_ws_ctx->user_id == ygs_ws_ctx->room->owner_id()) { \
             PGZXB_DEBUG_ASSERT(ygs_ws_ctx->room->owner_wschannel().get() == channel.get()); \
             ygs_ws_ctx->room->game()->opFunc(); \
+            extCode \
             auto resp_json = make_response_json_data(ErrCode::SUCCESS, nullptr); \
+            channel->send(resp_json.dump()); \
+            return; \
+        } else if (!ygs_ws_ctx->room->game()) { \
+            auto resp_json = make_response_json_data(ErrCode::NO_GAME, nullptr); \
             channel->send(resp_json.dump()); \
             return; \
         } else { \
@@ -95,9 +100,24 @@ static bool registe_request_processing_table(ReqProcFuncTable &table) {
         } \
     }
 
-    DEFINE_OP_GAME('S', START, start);
-    DEFINE_OP_GAME('P', PAUSE, pause);
-    DEFINE_OP_GAME('E', END, stop);
+    DEFINE_OP_GAME('S', START, start, PGZXB_PASS;);
+    DEFINE_OP_GAME('P', PAUSE, pause, PGZXB_PASS;);
+    DEFINE_OP_GAME('E', END, stop,
+        auto game = ygs_ws_ctx->room->game();
+        auto game_id = game->id();
+        auto human_friendly_game_id = game_id + ":" + game->id();
+        PGYGS_LOG("Removing game={0} (After stopping game)", human_friendly_game_id);
+
+        game->force_stop();
+        game->wait_game_loop();
+        
+        PGYGS_LOG("Ref count of game={0}: {1}", human_friendly_game_id, game.use_count());
+        ygs_ws_ctx->room->set_game(nullptr);
+        auto removed = ygs_ctx->game_mgr.try_remove_object(game_id);
+        PGZXB_DEBUG_ASSERT(removed);
+        PGYGS_LOG("Ref count of game={0}: {1}", human_friendly_game_id, game.use_count());
+        PGZXB_DEBUG_ASSERT(game.use_count() == 1);
+    );
 #undef DEFINE_OP_GAME
 
     table['I' - 'A'] = [](YGSContext *ygs_ctx, const WebSocketChannelPtr &channel, const ReqProcFuncArgs &args) {
@@ -165,7 +185,7 @@ static bool registe_request_processing_table(ReqProcFuncTable &table) {
     return std::rand() % 2;
 }
 
-static void process_request(YGSContext *ygs_ctx, const WebSocketChannelPtr& channel, const std::string& msg) {
+static void process_one_request(YGSContext *ygs_ctx, const WebSocketChannelPtr& channel, const std::string& msg) {
     static ReqProcFunc REQUEST_PROCESSING_TABLE[('Z' - 'A') + 1];
     [[maybe_unused]] static bool flag = registe_request_processing_table(REQUEST_PROCESSING_TABLE);
     
@@ -195,43 +215,41 @@ static void process_request(YGSContext *ygs_ctx, const WebSocketChannelPtr& chan
     }
 }
 
+static void process_request(YGSContext *ygs_ctx, const WebSocketChannelPtr& channel, const std::string& msg) {
+    std::istringstream iss(msg);
+    while(true) {
+        std::string cmd;
+        std::getline(iss, cmd, ';');
+        if (cmd.empty()) break;
+        process_one_request(ygs_ctx, channel, cmd);
+    }
+}
+
 hv::WebSocketService new_websocket_service(YGSContext *ygs_ctx) {
-    WebSocketService ws;
-    ws.onopen = [](const WebSocketChannelPtr& channel, const std::string& url) {
-        PGYGS_LOG("New WebSocket connection(from=\"{0}\", with url=\"{1}\")",
-            channel->peeraddr(), url);
-        channel->setContext(nullptr);
-    };
-
-    ws.onmessage = [ygs_ctx](const WebSocketChannelPtr& channel, const std::string& msg) {
-        // Create room: "C User-ID Room-ID Game-ID", Response-data: [{"id":, "url":},...] (resources)
-        // Start game:  "S",                         Response-data: null
-        // Pause game:  "P",                         Response-data: null
-        // End game:    "E",                         Response-data: null
-        // enter Room:  "R User-ID Room-ID",         Response-data: [{"id":, "url":},...] (resources)
-        // Input:       "I keycode",                 Don't responce
-        process_request(ygs_ctx, channel, msg);
-    };
-
-    ws.onclose = [ygs_ctx](const WebSocketChannelPtr& channel) {
+    auto reset_ws_conn = [ygs_ctx](const WebSocketChannelPtr& channel) {
         PGYGS_LOG("Close WebSocket connection(from=\"{0}\")", channel->peeraddr());
         if (channel->context()) {
             auto *ygs_ws_ctx = channel->getContext<YGSWSContext>();
             if (ygs_ws_ctx->user_id == ygs_ws_ctx->room->owner_id()) {
                 auto game = ygs_ws_ctx->room->game();
-                auto game_id = game->id();
-                auto human_friendly_game_id = game_id + ":" + game->id();
+                if (game) {
+                    auto game_id = game->id();
+                    auto human_friendly_game_id = game_id + ":" + game->id();
 
-                game->force_stop();
-                game->wait_game_loop();
+                    game->force_stop();
+                    game->wait_game_loop();
 
-                PGYGS_LOG("Ref count of game={0}: {1}", human_friendly_game_id, game.use_count());
-                auto removed = ygs_ctx->room_mgr.try_remove_object(ygs_ws_ctx->room->id());
-                PGZXB_DEBUG_ASSERT(removed);
-                removed = ygs_ctx->game_mgr.try_remove_object(game_id);
-                PGZXB_DEBUG_ASSERT(removed);
-                PGYGS_LOG("Ref count of game={0}: {1}", human_friendly_game_id, game.use_count());
-                PGZXB_DEBUG_ASSERT(game.use_count() == 1);
+                    PGYGS_LOG("Ref count of game={0}: {1}", human_friendly_game_id, game.use_count());
+                    auto removed = ygs_ctx->room_mgr.try_remove_object(ygs_ws_ctx->room->id());
+                    PGZXB_DEBUG_ASSERT(removed);
+                    removed = ygs_ctx->game_mgr.try_remove_object(game_id);
+                    PGZXB_DEBUG_ASSERT(removed);
+                    PGYGS_LOG("Ref count of game={0}: {1}", human_friendly_game_id, game.use_count());
+                    PGZXB_DEBUG_ASSERT(game.use_count() == 1);
+                } else {
+                    auto removed = ygs_ctx->room_mgr.try_remove_object(ygs_ws_ctx->room->id());
+                    PGZXB_DEBUG_ASSERT(removed);
+                }
             } else {
                 PGZXB_DEBUG_ASSERT(ygs_ws_ctx->game_obj);
                 PGYGS_LOG("User(user_id={0}, game_obj={1}) exiting", ygs_ws_ctx->user_id, ygs_ws_ctx->game_obj->id());
@@ -241,6 +259,27 @@ hv::WebSocketService new_websocket_service(YGSContext *ygs_ctx) {
             channel->deleteContext<YGSWSContext>();
         }
     };
+
+    WebSocketService ws;
+
+    ws.onopen = [](const WebSocketChannelPtr& channel, const std::string& url) {
+        PGYGS_LOG("New WebSocket connection(from=\"{0}\", with url=\"{1}\")",
+            channel->peeraddr(), url);
+        channel->setContext(nullptr);
+    };
+
+    ws.onmessage = [ygs_ctx, reset_ws_conn](const WebSocketChannelPtr& channel, const std::string& msg) {
+        // Reset conn:  "O" (Not zero but big-o: O, Special command)
+        // Create room: "C User-ID Room-ID Game-ID", Response-data: [{"id":, "url":},...] (resources)
+        // Start game:  "S",                         Response-data: null
+        // Pause game:  "P",                         Response-data: null
+        // End game:    "E",                         Response-data: null
+        // enter Room:  "R User-ID Room-ID",         Response-data: [{"id":, "url":},...] (resources)
+        // Input:       "I keycode",                 Don't responce
+        process_request(ygs_ctx, channel, msg);
+    };
+
+    ws.onclose = reset_ws_conn;
     return ws;
 }
 
