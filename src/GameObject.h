@@ -21,6 +21,28 @@ public:
         DEAD,
     };
 
+    GameObject() = default;
+
+    // GameObject(GameObject && obj)
+    //  : id_(obj.id_),
+    //    type_(obj.type_),
+    //    state_((State)obj.state_),
+    //    surface_img_id_(obj.surface_img_id_),
+    //    aabb_(obj.aabb_),
+    //    velocity_(obj.velocity_),
+    //    controller_(std::move(obj.controller_)),
+    //    event_queue_(std::move(obj.event_queue_)),
+    //    context_(obj.context_),
+    //    gen_rendering_orders_callback_(std::move(obj.gen_rendering_orders_callback_)) {
+    // }
+
+    // GameObject &operator= (GameObject &&obj) {
+    //     // Bad practice, don't abuse
+    //     this->~GameObject();
+    //     new (this) GameObject(std::move(obj));
+    //     return *this;
+    // }
+
     int id() const {
         return id_;
     }

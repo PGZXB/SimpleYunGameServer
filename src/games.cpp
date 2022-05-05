@@ -11,7 +11,8 @@ namespace examples {
 std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string &game_id) {
     constexpr const std::size_t TANK_WIDTH = 50;
     constexpr const std::size_t TANK_HEIGHT = 50;
-    constexpr const std::size_t TANK_SPEED = 5;
+    constexpr const std::size_t PLAYER_TANK_SPEED = 5;
+    constexpr const std::size_t NPC_TANK_SPEED = 2;
     constexpr const std::size_t BULLET_WIDTH_HEIGHT = 5;
     constexpr const std::size_t BULLET_SPEED = 20;
     constexpr const std::size_t A_WALL_WIDTH_HEIGHT = 50;
@@ -32,8 +33,18 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
         BACKGROUND,
         WALL,
     };
-    
+
+#ifdef PGYGS_WITH_LOG
+    auto tank_game = std::shared_ptr<Game>(
+        new Game(id, game_id), 
+        [](Game *ptr){
+            PGYGS_LOG("Deleting Game {0}", ptr->id());
+            delete ptr;
+        }
+    );
+#else
     auto tank_game = std::make_shared<Game>(id, game_id);
+#endif
 
     Resource::Mgr res_mgr;
     res_mgr.force_create_object(BACKGROUND_RES_ID,    BACKGROUND_RES_ID,    "tankgame_background.jpg"        );
@@ -56,7 +67,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                 current_tick_count = 0;
                 go->aabb().theta_ = (std::rand() % 4) * 90;
                 auto unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
-                go->velocity() = (unit_vec *= TANK_SPEED);
+                go->velocity() = (unit_vec *= NPC_TANK_SPEED);
             }
 
             if (events & Event::COLLISION) {
@@ -64,7 +75,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                 for (const auto & e : collision_with) {
                     if (e->type() == (int)GOType::WALL) {
                         auto dir_unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
-                        go->velocity() = (dir_unit_vec *= -TANK_SPEED);
+                        go->velocity() = (dir_unit_vec *= -NPC_TANK_SPEED);
                         go->aabb().theta_ += 180; // Reverse direction
                         if ((int)go->aabb().theta_ >= 360) go->aabb().theta_ -= 360;
                     } else if (e->type() == (int)GOType::BULLET) {
@@ -72,7 +83,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                     } else if (e->type() == (int)GOType::BACKGROUND) {
                         if (!go->aabb().to_rect().inner(e->aabb().to_rect())) {
                             auto dir_unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
-                            go->velocity() = (dir_unit_vec *= -TANK_SPEED);
+                            go->velocity() = (dir_unit_vec *= -NPC_TANK_SPEED);
                             go->aabb().theta_ += 180; // Reverse direction
                             if ((int)go->aabb().theta_ >= 360) go->aabb().theta_ -= 360;
                         }
@@ -119,13 +130,13 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                 for (const auto & e : collision_with) {
                     if (e->type() == (int)GOType::WALL) {
                         auto dir_unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
-                        go->aabb().area_.top_left -= (dir_unit_vec *= TANK_SPEED);
+                        go->aabb().area_.top_left -= (dir_unit_vec *= PLAYER_TANK_SPEED);
                     } else if (e->type() == (int)GOType::BULLET) {
                         go->will_dead();
                     } else if (e->type() == (int)GOType::BACKGROUND) {
                         if (!go->aabb().to_rect().inner(e->aabb().to_rect())) {
                             auto dir_unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
-                            go->aabb().area_.top_left -= (dir_unit_vec *= TANK_SPEED);
+                            go->aabb().area_.top_left -= (dir_unit_vec *= PLAYER_TANK_SPEED);
                         }
                     }
                 }

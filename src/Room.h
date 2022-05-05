@@ -9,6 +9,7 @@
 #include "Game.h"
 #include "pg/pgfwd.h"
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 PGYGS_NAMESPACE_START
 
@@ -44,20 +45,34 @@ public:
             }
         });
         auto player_creator = game_->game_object_creator_mgr().lookup_object("player");
-        PGZXB_DEBUG_ASSERT(player_creator);
-        auto owner_go = player_creator();
-        game_->add_game_object(owner_go);
-        game_->init();
-        return owner_go;
+        if (player_creator) {
+            auto owner_go = player_creator();
+            game_->add_game_object(owner_go);
+            game_->init(); // Start game-loop-thread in it
+            return owner_go;
+        }
+        PGYGS_LOG("Game@{0} don't have 'player'-creator to create player-game-object", game_->id());
+        return nullptr;
     }
 
-    bool add_member(const std::string &id, const WebSocketChannelPtr &channel) {
+    bool try_add_member(const std::string &id, const WebSocketChannelPtr &channel, std::shared_ptr<GameObject> *ppGO = nullptr) {
+        std::lock_guard<std::mutex> _(mutext_);
         if (auto iter = member_wschannels_.find(id); iter == member_wschannels_.end()) {
             member_wschannels_[id] = channel;
             auto player_creator = game_->game_object_creator_mgr().lookup_object("player");
             PGZXB_DEBUG_ASSERT(!!player_creator);
-            game_->add_game_object(player_creator());
+            auto go = player_creator();
+            game_->add_game_object(go);
+            if (ppGO) *ppGO = std::move(go);
             return true;
+        }
+        return false;
+    }
+
+    bool try_remove_member(const std::string &id) {
+        std::lock_guard<std::mutex> _(mutext_);
+        if (auto iter = member_wschannels_.find(id); iter != member_wschannels_.end()) {
+            member_wschannels_.erase(iter);
         }
         return false;
     }
@@ -77,9 +92,12 @@ public:
         obj["id"] = id_;
         obj["owner_id"] = owner_id_;
         auto members = Json::array();
-        for (const auto &[id, chnn]: member_wschannels_) {
-            members.push_back(id);
-            PGZXB_UNUSED(chnn);
+        {
+            std::lock_guard<std::mutex> _(mutext_);
+            for (const auto &[id, chnn]: member_wschannels_) {
+                members.push_back(id);
+                PGZXB_UNUSED(chnn);
+            }
         }
         obj["member_ids"] = members;
 
@@ -87,21 +105,26 @@ public:
     }
 
     const std::string &id() const {
+        /* std::lock_guard<std::mutex> _(mutext_); */
         return id_;
     }
 
     std::shared_ptr<Game> game() const {
+        /* std::lock_guard<std::mutex> _(mutext_); */
         return game_;
     }
 
     const std::string &owner_id() const {
+        /* std::lock_guard<std::mutex> _(mutext_); */
         return owner_id_;
     }
 
     WebSocketChannelPtr owner_wschannel() const {
+        /* std::lock_guard<std::mutex> _(mutext_); */
         return owner_wschannel_;
     }
 private:
+    mutable std::mutex mutext_;
     std::string id_;
     std::shared_ptr<Game> game_{nullptr};
     std::string owner_id_;

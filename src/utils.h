@@ -120,11 +120,14 @@ enum Event {
     DEFINE_KEY_EVENTS(D,     1 << 14, 1 << 15),
     DEFINE_KEY_EVENTS(SPACE, 1 << 16, 1 << 17),
 
-    // Game control event
+    // Game controling events
     START_GAME = 1 << 18,
     PAUSE_GAME = 1 << 19,
     END_GAME   = 1 << 20,
     COLLISION  = 1 << 21,
+
+    // GameObject controling events
+    GO_DEAD    = 1 << 22, // GameObject DEAD
 };
 
 }; // namespace Event

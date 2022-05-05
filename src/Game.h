@@ -49,30 +49,44 @@ public:
     }
 
     ~Game() {
-        push_event(Event::END_GAME);
-        if (game_loop_th_.joinable()) {
+        if (state_ != State::OVER) {
+            this->stop();
+            this->force_clear();
+        }
+        if (std::this_thread::get_id() != game_loop_th_.get_id() && game_loop_th_.joinable()) {
             game_loop_th_.join();
         }
     }
 
     void start() {
-        PGYGS_LOG("Game@{0}OF{1} starting", id_, game_id_);
+        PGYGS_LOG("Game@{0}Of{1} starting", id_, game_id_);
         push_event(Event::START_GAME);
     }
 
     void pause() {
-        PGYGS_LOG("Game@{0}OF{1} pause", id_, game_id_);
+        PGYGS_LOG("Game@{0}Of{1} pause", id_, game_id_);
         push_event(Event::PAUSE_GAME);
     }
 
     void stop() {
-        PGYGS_LOG("Game@{0}OF{1} exiting", id_, game_id_);
+        PGYGS_LOG("Game@{0}of{1} exiting", id_, game_id_);
         push_event(Event::END_GAME);
     }
 
     void push_event(Event::Event event) {
-        PGYGS_LOG("Game@{0}OF{1} get event: {2}", id_, game_id_, (std::uint64_t)event);
+        PGYGS_LOG("Game@{0}of{1} get event: {2}", id_, game_id_, (std::uint64_t)event);
         event_queue_.enqueue(event);
+    }
+
+    void force_stop() {
+        PGYGS_LOG("Game@{0}of{1} force exiting", id_, game_id_);
+        state_ = State::OVER;
+    }
+
+    void wait_game_loop() {
+        PGZXB_DEBUG_ASSERT(std::this_thread::get_id() != game_loop_th_.get_id() && game_loop_th_.joinable());
+        PGYGS_LOG("Waiting game_loop of game@{0}of{1}", id_, game_id_);
+        game_loop_th_.join();
     }
 
     void run_in_game_loop(const std::function<void()> &task) {
@@ -126,6 +140,8 @@ public:
 private:
     static void game_loop(std::shared_ptr<Game> game) {
         PGZXB_DEBUG_ASSERT(game);
+        const auto game_id = game->game_id_ + ":" + game->id();
+        PGYGS_LOG("Entering game_loop of Game {0}", game_id);
         while(game->state_ != State::OVER) {
             auto start = std::chrono::steady_clock::now();
             // SM of game loop:
@@ -224,6 +240,9 @@ private:
                 }
             }
         }
+        PGYGS_LOG("Force Clearing Game {0}", game_id);
+        game->force_clear();
+        PGYGS_LOG("Leaving game_loop of Game {0}", game_id);
     }
 
     void process_events(std::uint64_t events) {
@@ -262,9 +281,23 @@ private:
         }
     }
 
+    void force_clear() {
+        id_.clear();
+        game_id_.clear();
+        backgound_go_ = {};
+        game_object_list_.clear();
+        event_processor_ = nullptr;
+        display_callback_ = nullptr;
+        EventQueue().swap(event_queue_);
+        resouce_mgr_.clear();
+        go_creator_mgr_.clear();
+        TaskQueue().swap(pending_tasks_);
+        game_object_counter_ = 0;
+    }
+
     std::string id_;
     std::string game_id_;
-    State state_{State::INIT};
+    std::atomic<State> state_{State::INIT};
     std::thread game_loop_th_;
     GameObject backgound_go_;
     std::mutex mu_;

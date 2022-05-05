@@ -68,6 +68,10 @@ public:
     std::size_t size() const {
         return objs_.size();
     }
+
+    void clear() {
+        objs_.clear();
+    }
 private:
     std::unordered_map<K, T> objs_;
 };

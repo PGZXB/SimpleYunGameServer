@@ -13,7 +13,9 @@
 #ifdef PGYGS_WITH_LOG
 #define PGYGS_LOG(fmt, ...) \
     std::cerr << pgfmt::format( \
-        "[PGYGS]{0}:{1} LOG: {2}\n", __FILE__, __LINE__, \
+        "[PGYGS]{0}:{1} LOG: {2}\n", \
+        std::filesystem::relative(__FILE__).string(), \
+        __LINE__, \
         pgfmt::format(fmt, __VA_ARGS__))
 #else
 #define PGYGS_LOG(...) PGZXB_PASS
