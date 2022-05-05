@@ -21,7 +21,8 @@
                             <input id="pgygs_user_id_input" type="text" value="">
                         </td>
                         <td>
-                            <button style="width: 100%; height: 100%;" onclick="req_start_or_pause_game()">开始/暂停游戏</button>
+                            <button style="width: 100%; height: 100%;"
+                                onclick="req_start_or_pause_game()">开始/暂停游戏</button>
                         </td>
                         <td>
                             <button style="width: 100%; height: 100%;" onclick="req_stop_game()">结束游戏</button>
@@ -143,7 +144,7 @@
                 ws.send(`R ${user_id} ${room_id};`);
                 state = IN_ROOM;
             } else if (confirm(`是否确认进入'${room_id}', 进入房间将自动离开当前房间(如果您是房主, 房间将销毁)`)) {
-                ws.send('0;');
+                ws.send('O;');
                 ws.send(`R ${user_id} ${room_id};`);
                 state = IN_ROOM;
             }
@@ -152,7 +153,7 @@
         function req_leave_room() {
             if (state == INIT) return;
             if (confirm(`是否确认离开当前房间(如果您是房主, 房间将销毁)`)) {
-                ws.send('0;');
+                ws.send('O;');
                 state = INIT;
             }
         }
@@ -221,6 +222,12 @@
                 const arr = data.resources;
                 for (var e of arr) {
                     g_res_map[e.id] = e.path;
+                    // axios.get("/" + e.path, {
+                    //     responseType: 'blob',
+                    //     async: false
+                    // }).then(res => {
+                    //     g_res_map[e.id] = window.URL.createObjectURL(res.data);
+                    // })();
                 }
             }
 
@@ -236,7 +243,7 @@
                     } else if (op === 'D') {
                         if (args[0] !== -1) {
                             const img = new Image();
-                            img.src = "http://127.0.0.1:8899/" + g_res_map[args[0]];
+                            img.src = g_res_map[args[0]];
                             img.onload = () => {
                                 const width = args[3];
                                 const height = args[4];

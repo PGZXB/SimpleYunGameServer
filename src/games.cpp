@@ -31,6 +31,8 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
         PLAYER_TANK = (int)gos::GOType::GOTYPE_COUNT,
         NPC_TANK,
         BULLET,
+        PLAYER_BULLET,
+        NPC_BULLET,
         BACKGROUND,
         WALL,
     };
@@ -72,11 +74,39 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
 
         void operator() (std::shared_ptr<Game> game, std::shared_ptr<GameObject> go, std::uint64_t events) {
             if (current_tick_count == dest_tick_count) {
-                dest_tick_count = std::rand() % (FPS * 5) + FPS * 3;
+                dest_tick_count = std::rand() % (FPS * 2) + FPS * 3;
                 current_tick_count = 0;
                 go->aabb().theta_ = (std::rand() % 4) * 90;
                 auto unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
                 go->velocity() = (unit_vec *= NPC_TANK_SPEED);
+            }
+
+            if (std::rand() % FPS == 0) {
+                game->run_in_game_loop([game, go]() {
+                    std::function<std::shared_ptr<GameObject>()> *pCreator{nullptr};
+                    auto found = game->game_object_creator_mgr().try_lookup_object("bullet", &pCreator);
+                    PGZXB_DEBUG_ASSERT(found);
+                    PGZXB_DEBUG_ASSERT(pCreator && *pCreator);
+                    auto bullet = (*pCreator)();
+                    bullet->set_type(GOType::NPC_BULLET);
+                    auto unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
+                    auto offset = unit_vec;
+                    offset *= (go->aabb().area_.height / 2);
+                    offset += (axis_theta_to_unit_vec2<int>(go->aabb().theta_) *= 16);
+                    auto fire_point = (go->aabb().area_.center() += offset);
+                    bullet->set_velocity(unit_vec *= BULLET_SPEED)
+                        .set_aabb(
+                            AABB<int>{ // bounding box
+                                Rect<int>{
+                                    fire_point,
+                                    BULLET_WIDTH_HEIGHT,
+                                    BULLET_WIDTH_HEIGHT
+                                },
+                                270 // theta
+                            }
+                        );
+                    game->add_game_object(bullet);
+                });
             }
 
             if (events & Event::COLLISION) {
@@ -87,7 +117,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                         go->velocity() = (dir_unit_vec *= -NPC_TANK_SPEED);
                         go->aabb().theta_ += 180; // Reverse direction
                         if ((int)go->aabb().theta_ >= 360) go->aabb().theta_ -= 360;
-                    } else if (e->type() == (int)GOType::BULLET) {
+                    } else if (e->type() == (int)GOType::PLAYER_BULLET) {
                         go->will_dead();
                         game->run_in_game_loop([game, go, this]() {
                             using namespace std::chrono_literals;
@@ -125,9 +155,10 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                     if (e->type() == (int)GOType::WALL) {
                         go->will_dead();
                         break;
-                    } else if (e->type() == (int)GOType::BULLET) {
+                    } /* else if (e->type() == (int)GOType::XXX_BULLET) {
                         // Pass
-                    } else if (e->type() == (int)GOType::BACKGROUND) {
+                    } */ 
+                    else if (e->type() == (int)GOType::BACKGROUND) {
                         if (!go->aabb().to_rect().inner(e->aabb().to_rect())) {
                             go->will_dead();
                         }
@@ -147,7 +178,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                     if (e->type() == (int)GOType::WALL) {
                         auto dir_unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
                         go->aabb().area_.top_left -= (dir_unit_vec *= PLAYER_TANK_SPEED);
-                    } else if (e->type() == (int)GOType::BULLET) {
+                    } else if (e->type() == (int)GOType::NPC_BULLET) {
                         go->will_dead();
                         game->run_in_game_loop([game, go, tank_blast_animation_imgs]() {
                             using namespace std::chrono_literals;
@@ -172,7 +203,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                     PGZXB_DEBUG_ASSERT(found);
                     PGZXB_DEBUG_ASSERT(pCreator && *pCreator);
                     auto bullet = (*pCreator)();
-
+                    bullet->set_type(GOType::PLAYER_BULLET);
                     auto unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
                     auto offset = unit_vec;
                     offset *= (go->aabb().area_.height / 2);

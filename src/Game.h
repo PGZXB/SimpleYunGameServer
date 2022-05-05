@@ -191,6 +191,7 @@ private:
 
                 // Tick all game-objects
                 // (Get tick-tasks of controller of GO -> Launch them to thread-pool)
+                // std::vector<std::fu>
                 for (auto &e : game_object_list) {
                     PGZXB_DEBUG_ASSERT(e);
                     if (auto controller = e->controller()) {
