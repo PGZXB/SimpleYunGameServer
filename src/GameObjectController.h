@@ -20,6 +20,10 @@ public:
         return tick_task_;
     }
 
+    GameObjectTickTask &tick_task() {
+        return tick_task_;
+    }
+
     void set_tick_task(const GameObjectTickTask &task) {
         tick_task_ = [task](std::shared_ptr<Game> game, std::shared_ptr<GameObject> go, std::uint64_t events) {
             if (events & Event::GO_DEAD) {

@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <utility>
 #include "concurrentqueue.h"
 
 #include "fwd.h"
@@ -170,6 +171,25 @@ inline Vec2<T> axis_theta_to_unit_vec2(double theta) {
     PGZXB_DEBUG_ASSERT(false);
     return {};
 }
+
+template <typename F, typename R, typename ...Args>
+class FuncRef {
+public:
+    using Func = R(Args...);
+
+    FuncRef(F *f) : f_(f) {
+
+    }
+
+    FuncRef(const FuncRef &o) = default;
+    FuncRef &operator= (const FuncRef &o) = default;
+
+    R operator() (Args ... args) {
+        return (*f_)(std::forward<Args>(args)...);
+    }
+private:
+    F *f_{nullptr};
+};
 
 PGYGS_NAMESPACE_END
 #endif

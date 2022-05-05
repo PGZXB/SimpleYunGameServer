@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <functional>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -10,8 +11,8 @@
 #include <vector>
 
 #include "fwd.h"
-#include "pg/pgfwd.h"
 #include "utils.h"
+#include "ThreadPool.h"
 #include "ObjectMgr.h"
 #include "Resource.h"
 #include "RenderOrder.h"
@@ -146,6 +147,7 @@ private:
         PGZXB_DEBUG_ASSERT(game);
         const auto game_id = game->game_id_ + ":" + game->id();
         PGYGS_LOG("Entering game_loop of Game {0}", game_id);
+        ThreadPool thread_pool(std::thread::hardware_concurrency());
         while(game->state_ != State::OVER) {
             auto start = std::chrono::steady_clock::now();
             // SM of game loop:
@@ -191,7 +193,8 @@ private:
 
                 // Tick all game-objects
                 // (Get tick-tasks of controller of GO -> Launch them to thread-pool)
-                // std::vector<std::fu>
+                std::vector<std::future<void>> threads_fu;
+                using TickTaskRef = FuncRef<GameObjectTickTask, void, std::shared_ptr<Game>, std::shared_ptr<GameObject>, std::uint64_t>;
                 for (auto &e : game_object_list) {
                     PGZXB_DEBUG_ASSERT(e);
                     if (auto controller = e->controller()) {
@@ -200,9 +203,15 @@ private:
                             game_obj_events |= Event::COLLISION;
                             e->set_context(&cr);
                         }
-                        const auto &tick_task = controller->tick_task();
-                        tick_task(game, e, game_obj_events); // FIXME: Temp
+                        auto &tick_task = controller->tick_task();
+                        // tick_task(game, e, game_obj_events); // FIXME: Temp
+                        auto fu = thread_pool.enqueue(TickTaskRef(&tick_task), game, e, game_obj_events);
+                        threads_fu.emplace_back(std::move(fu));
                     }
+                }
+
+                for (auto &e : threads_fu) {
+                    e.get();
                 }
 
                 // Remove dead GOs

@@ -9,6 +9,7 @@ include_directories(src)
 add_subdirectory(external/PGUtils)
 include_directories(external/PGUtils)
 include_directories(external/ConcurrentQueue)
+include_directories(external/ThreadPool)
 
 SET(CMAKE_BUILD_TYPE "Debug")
 add_definitions(-DPGZXB_DEBUG)
