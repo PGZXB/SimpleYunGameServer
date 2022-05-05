@@ -2,7 +2,8 @@
 #include "Game.h"
 #include "RenderOrder.h"
 #include "Resource.h"
-#include <cstddef>
+#include "GOs/gos.h"
+#include "fwd.h"
 #include <memory>
 #include <random>
 PGYGS_NAMESPACE_START
@@ -27,7 +28,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
     constexpr const ResourceID WALL_RES_ID = 5;
 
     enum class GOType : int {
-        PLAYER_TANK,
+        PLAYER_TANK = (int)gos::GOType::GOTYPE_COUNT,
         NPC_TANK,
         BULLET,
         BACKGROUND,
@@ -53,13 +54,21 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
     res_mgr.force_create_object(NPC_TANK_RES_ID,      NPC_TANK_RES_ID,      "tankgame_npc_tank.gif"          );
     res_mgr.force_create_object(NPC_BULLET_RES_ID,    NPC_BULLET_RES_ID,    "tankgame_npc_tank_bullet.gif"   );
     res_mgr.force_create_object(WALL_RES_ID,          WALL_RES_ID,          "tankgame_wall.gif"              );
+    
+    std::vector<ResourceID> tank_blast_animation_imgs = {6, 7, 8, 9, 10, 11, 12, 13};
+    for (auto id : tank_blast_animation_imgs) {
+        res_mgr.force_create_object(id, id, "tankgame_blast" + std::to_string(id - 6 + 1) + ".gif");
+    }
 
     std::shared_ptr<GameObjectController> player_tank_controller = std::make_shared<GameObjectController>();
     std::shared_ptr<GameObjectController> bullet_controller = std::make_shared<GameObjectController>();
     
+    // struct 
+
     struct NPCTankTickTask {
         mutable int dest_tick_count{0};
         mutable int current_tick_count{0};
+        std::vector<ResourceID> tank_blast_animation_imgs;
 
         void operator() (std::shared_ptr<Game> game, std::shared_ptr<GameObject> go, std::uint64_t events) {
             if (current_tick_count == dest_tick_count) {
@@ -80,6 +89,13 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                         if ((int)go->aabb().theta_ >= 360) go->aabb().theta_ -= 360;
                     } else if (e->type() == (int)GOType::BULLET) {
                         go->will_dead();
+                        game->run_in_game_loop([game, go, this]() {
+                            using namespace std::chrono_literals;
+                            game->add_game_object(
+                                gos::create_animation(
+                                    go->aabb(), tank_blast_animation_imgs, 100ms, false)
+                            );
+                        });
                     } else if (e->type() == (int)GOType::BACKGROUND) {
                         if (!go->aabb().to_rect().inner(e->aabb().to_rect())) {
                             auto dir_unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
@@ -122,7 +138,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
     );
 
     player_tank_controller->set_tick_task(
-        [](std::shared_ptr<Game> game, std::shared_ptr<GameObject> go, std::uint64_t events) {
+        [tank_blast_animation_imgs](std::shared_ptr<Game> game, std::shared_ptr<GameObject> go, std::uint64_t events) {
             go->velocity() = {0, 0};
 
             if (events & Event::COLLISION) {
@@ -133,6 +149,13 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                         go->aabb().area_.top_left -= (dir_unit_vec *= PLAYER_TANK_SPEED);
                     } else if (e->type() == (int)GOType::BULLET) {
                         go->will_dead();
+                        game->run_in_game_loop([game, go, tank_blast_animation_imgs]() {
+                            using namespace std::chrono_literals;
+                            game->add_game_object(
+                                gos::create_animation(
+                                    go->aabb(), tank_blast_animation_imgs, 1ms, false)
+                            );
+                        });
                     } else if (e->type() == (int)GOType::BACKGROUND) {
                         if (!go->aabb().to_rect().inner(e->aabb().to_rect())) {
                             auto dir_unit_vec = axis_theta_to_unit_vec2<int>(go->aabb().theta_);
@@ -205,9 +228,11 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
             .set_controller(bullet_controller);
         return bullet;
     });
-    go_creator_mgr.force_create_object("npc-tank", [tank_game]() {
+    go_creator_mgr.force_create_object("npc-tank", [tank_game, tank_blast_animation_imgs]() {
         auto npc_tank_controller = std::make_shared<GameObjectController>();
-        npc_tank_controller->set_tick_task(NPCTankTickTask());
+        NPCTankTickTask tick_task;
+        tick_task.tank_blast_animation_imgs = tank_blast_animation_imgs;
+        npc_tank_controller->set_tick_task(tick_task);
         auto npc = std::make_shared<GameObject>();
         auto randx = std::rand() % tank_game->background().aabb().area_.center().x;
         npc->set_type(GOType::NPC_TANK)
