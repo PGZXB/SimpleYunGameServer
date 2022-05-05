@@ -93,7 +93,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                             using namespace std::chrono_literals;
                             game->add_game_object(
                                 gos::create_animation(
-                                    go->aabb(), tank_blast_animation_imgs, 100ms, false)
+                                    go->aabb(), tank_blast_animation_imgs, 10ms, false)
                             );
                         });
                     } else if (e->type() == (int)GOType::BACKGROUND) {
@@ -153,7 +153,7 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                             using namespace std::chrono_literals;
                             game->add_game_object(
                                 gos::create_animation(
-                                    go->aabb(), tank_blast_animation_imgs, 1ms, false)
+                                    go->aabb(), tank_blast_animation_imgs, 10ms, false)
                             );
                         });
                     } else if (e->type() == (int)GOType::BACKGROUND) {
