@@ -146,8 +146,11 @@ private:
     static void game_loop(std::shared_ptr<Game> game) {
         PGZXB_DEBUG_ASSERT(game);
         const auto game_id = game->game_id_ + ":" + game->id();
+        std::vector<RenderOrder> last_render_orders;
         PGYGS_LOG("Entering game_loop of Game {0}", game_id);
+#ifdef PGYGS_LAUNCH_TICKTAKS_TO_THREADPOOL
         ThreadPool thread_pool(std::thread::hardware_concurrency());
+#endif
         while(game->state_ != State::OVER) {
             auto start = std::chrono::steady_clock::now();
             // SM of game loop:
@@ -193,8 +196,10 @@ private:
 
                 // Tick all game-objects
                 // (Get tick-tasks of controller of GO -> Launch them to thread-pool)
+#ifdef PGYGS_LAUNCH_TICKTAKS_TO_THREADPOOL
                 std::vector<std::future<void>> threads_fu;
                 using TickTaskRef = FuncRef<GameObjectTickTask, void, std::shared_ptr<Game>, std::shared_ptr<GameObject>, std::uint64_t>;
+#endif
                 for (auto &e : game_object_list) {
                     PGZXB_DEBUG_ASSERT(e);
                     if (auto controller = e->controller()) {
@@ -204,15 +209,21 @@ private:
                             e->set_context(&cr);
                         }
                         auto &tick_task = controller->tick_task();
-                        // tick_task(game, e, game_obj_events); // FIXME: Temp
+#ifdef PGYGS_LAUNCH_TICKTAKS_TO_THREADPOOL
                         auto fu = thread_pool.enqueue(TickTaskRef(&tick_task), game, e, game_obj_events);
                         threads_fu.emplace_back(std::move(fu));
+#else
+                        tick_task(game, e, game_obj_events);
+#endif
                     }
                 }
 
+#ifdef PGYGS_LAUNCH_TICKTAKS_TO_THREADPOOL
                 for (auto &e : threads_fu) {
                     e.get();
                 }
+#endif
+
 
                 // Remove dead GOs
                 for (auto iter = game_object_list.begin(); iter != game_object_list.end(); ++iter) {
@@ -241,17 +252,18 @@ private:
                     auto e_orders = e->to_rendering_orders();
                     orders.insert(orders.end(), e_orders.begin(), e_orders.end());
                 }
-                {
+                if (orders != last_render_orders) { // Display if changed
                     PGZXB_DEBUG_ASSERT(game->display_callback_);
                     game->display_callback_(orders);
+                    last_render_orders = std::move(orders);
                 }
+            }
 
-                using namespace std::chrono_literals;
-                constexpr const auto need_delay = 1000ms / FPS;
-                const auto true_delay = std::chrono::steady_clock::now() - start;
-                if (true_delay < need_delay) {
-                    std::this_thread::sleep_for(need_delay - true_delay);
-                }
+            using namespace std::chrono_literals;
+            constexpr const auto need_delay = 1000ms / FPS;
+            const auto true_delay = std::chrono::steady_clock::now() - start;
+            if (true_delay < need_delay) {
+                std::this_thread::sleep_for(need_delay - true_delay);
             }
         }
         PGYGS_LOG("Force Clearing Game {0}", game_id);

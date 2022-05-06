@@ -88,6 +88,7 @@
         const myCanvas = document.getElementById("myCanvas");
         const ws = new WebSocket("ws://127.0.0.1:8899");
         var state = INIT;
+        var next_state = INIT;
 
         function check_and_get_text_input(input_id, err_msg) {
             const input = document.getElementById(input_id);
@@ -119,10 +120,10 @@
                 // ws.send(`G ${game_id}`);
             } else if (state === ROOM_CREATED || state == GAME_PAUSE) {
                 ws.send('S;');
-                state = GAME_RUNNNIG;
+                next_state = GAME_RUNNNIG;
             } else if (state === GAME_RUNNNIG) {
                 ws.send('P;');
-                state = GAME_PAUSE;
+                next_state = GAME_PAUSE;
             } else {
                 alert('没有创建房间或不是房主;');
             }
@@ -131,7 +132,7 @@
         function req_stop_game() {
             if (state == GAME_RUNNNIG || state == GAME_PAUSE) {
                 ws.send('E;');
-                state = GAME_OVER;
+                next_state = GAME_OVER;
             }
         }
 
@@ -142,11 +143,11 @@
             if (room_id === null) return;
             if (state == INIT) {
                 ws.send(`R ${user_id} ${room_id};`);
-                state = IN_ROOM;
+                next_state = IN_ROOM;
             } else if (confirm(`是否确认进入'${room_id}', 进入房间将自动离开当前房间(如果您是房主, 房间将销毁)`)) {
                 ws.send('O;');
                 ws.send(`R ${user_id} ${room_id};`);
-                state = IN_ROOM;
+                next_state = IN_ROOM;
             }
         }
 
@@ -154,7 +155,7 @@
             if (state == INIT) return;
             if (confirm(`是否确认离开当前房间(如果您是房主, 房间将销毁)`)) {
                 ws.send('O;');
-                state = INIT;
+                next_state = INIT;
             }
         }
 
@@ -167,7 +168,7 @@
             const game_id = check_and_get_selector_input('pgygs_game_creator_selector', '选择正确的游戏');
             if (game_id === null) return;
             ws.send(`C ${user_id} ${room_id} ${game_id}`);
-            state = ROOM_CREATED;
+            next_state = ROOM_CREATED;
         }
 
         function req_data_and_add_to_selector(url, selector_id, to_string) {
@@ -217,6 +218,7 @@
                 return;
             }
 
+            if (next_state !== state) state = next_state;
             const data = resp_data.data;
             if (data.resources !== undefined && data.resources instanceof Array) {
                 const arr = data.resources;
@@ -295,6 +297,7 @@
             if (e && e.keyCode == 32) { // <space>
                 ws.send('I ' + (1 << 16).toString());
             }
+            e.returnValue = false;
         };
 
         // ctx.fillStyle = "#FF0000";

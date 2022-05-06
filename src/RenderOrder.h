@@ -32,6 +32,10 @@ struct RenderOrder {
         res["args"] = args;
         return res;
     }
+
+    bool operator== (const RenderOrder &o) const {
+        return this->code == o.code && this->args == o.args;
+    }
 };
 
 PGYGS_NAMESPACE_END

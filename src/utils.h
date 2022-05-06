@@ -77,7 +77,7 @@ struct Rect {
 template <typename T>
 struct AABB { // Oriented Bounding Box
     Rect<T> area_{};
-    double theta_{0.f}; // with posi-x, only 0, 90, 180, 270
+    T theta_{0}; // with posi-x, only 0, 90, 180, 270
 
     Rect<T> to_rect() const {
         int i = (int)theta_;
@@ -138,7 +138,7 @@ using EventQueue = moodycamel::ConcurrentQueue<Event::Event>;
 using TaskQueue = moodycamel::ConcurrentQueue<std::function<void()>>;
 
 constexpr const std::size_t DOUBLE2INT_FACTOR = 1000;
-constexpr const std::size_t FPS = 60;
+constexpr const std::size_t FPS = 40;
 
 inline Json make_response_json_data(ErrCode err_code, const Json &data) {
     // {
