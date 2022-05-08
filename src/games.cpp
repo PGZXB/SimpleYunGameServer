@@ -1,14 +1,16 @@
 #include "games.h"
 #include "Game.h"
+#include "GameObjectController.h"
 #include "RenderOrder.h"
 #include "Resource.h"
 #include "GOs/gos.h"
-#include "fwd.h"
 #include <memory>
 #include <random>
 PGYGS_NAMESPACE_START
 namespace examples {
 
+// Specific game logic (simple tank game)
+// Note, FIXME: Long function, bad practice
 std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string &game_id) {
     constexpr const std::size_t TANK_WIDTH = 50;
     constexpr const std::size_t TANK_HEIGHT = 50;
@@ -61,6 +63,11 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
     for (auto id : tank_blast_animation_imgs) {
         res_mgr.force_create_object(id, id, "tankgame_blast" + std::to_string(id - 6 + 1) + ".gif");
     }
+    std::vector<ResourceID> gameover_animation_imgs = {14, 15};
+    res_mgr.force_create_object(14, 14, "tankgame_gameover.jpg");
+    res_mgr.force_create_object(15, 15, "tankgame_gameover2.png");
+    std::vector<ResourceID> gamesuccess_animation_imgs = {16};
+    res_mgr.force_create_object(16, 16, "tankgame_gamesuccess.png");
 
     std::shared_ptr<GameObjectController> player_tank_controller = std::make_shared<GameObjectController>();
     std::shared_ptr<GameObjectController> bullet_controller = std::make_shared<GameObjectController>();
@@ -125,6 +132,14 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                                 gos::create_animation(
                                     go->aabb(), tank_blast_animation_imgs, 10ms, false)
                             );
+                            if (game->count_game_object_by_type((int)GOType::NPC_TANK) == 0) {
+                                PGYGS_LOG("Game over, start playing game-success animation", 1);
+                                Game::GameObjectCreator *pCreator{nullptr};
+                                auto found = game->game_object_creator_mgr().try_lookup_object("gamesuccess_amimation", &pCreator);
+                                PGZXB_DEBUG_ASSERT(found);
+                                PGZXB_DEBUG_ASSERT(pCreator && *pCreator);
+                                game->add_game_object((*pCreator)());
+                            }
                         });
                     } else if (e->type() == (int)GOType::BACKGROUND) {
                         if (!go->aabb().to_rect().inner(e->aabb().to_rect())) {
@@ -186,6 +201,14 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
                                 gos::create_animation(
                                     go->aabb(), tank_blast_animation_imgs, 10ms, false)
                             );
+                            if (game->count_game_object_by_type((int)GOType::PLAYER_TANK) == 0) {
+                                PGYGS_LOG("Game over, start playing game-over animation", 1);
+                                Game::GameObjectCreator *pCreator{nullptr};
+                                auto found = game->game_object_creator_mgr().try_lookup_object("gameover_amimation", &pCreator);
+                                PGZXB_DEBUG_ASSERT(found);
+                                PGZXB_DEBUG_ASSERT(pCreator && *pCreator);
+                                game->add_game_object((*pCreator)());
+                            }
                         });
                     } else if (e->type() == (int)GOType::BACKGROUND) {
                         if (!go->aabb().to_rect().inner(e->aabb().to_rect())) {
@@ -248,7 +271,14 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
         tank->set_type(GOType::PLAYER_TANK)
             .set_surface_img_id(PLAYER_TANK_RES_ID)
             .set_velocity(Vec2<int>{0, 0})
-            .set_aabb(AABB<int>{Rect<int>{Point<int>{0, 0}, TANK_WIDTH, TANK_HEIGHT}, 270})
+            .set_aabb(   
+                AABB<int>{
+                    Rect<int>{
+                        Point<int>{0, BACKGROUND_HEIGHT - TANK_HEIGHT},
+                        TANK_WIDTH,
+                        TANK_HEIGHT
+                    }, 
+                270})
             .set_controller(player_tank_controller);
         return tank;
     });
@@ -309,6 +339,15 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
             .set_gen_rendering_orders_callback(gen_wall_render_orders);
         return wall;
     });
+    go_creator_mgr.force_create_object("gameover_amimation", [tank_game, gameover_animation_imgs]() {
+        using namespace std::chrono_literals;
+        return gos::create_animation(tank_game->background().aabb(), gameover_animation_imgs, 1000ms, true);
+    });
+    go_creator_mgr.force_create_object("gamesuccess_amimation", [tank_game, gamesuccess_animation_imgs]() {
+        using namespace std::chrono_literals;
+        return gos::create_animation(tank_game->background().aabb(), gamesuccess_animation_imgs, 100000000ms, true);
+    });
+
 
     GameObject background_object;
     background_object.set_type(GOType::BACKGROUND)
@@ -383,7 +422,6 @@ std::shared_ptr<Game> create_tank_game(const std::string &id, const std::string 
     // └────────────────────────────────────────────────────────────────────────────────┘
     const int MAP[][4] = {
         {80,  180, 7, 1},
-        {130, 180, 1, 1},
         {230, 480, 1, 1},
         {330, 380, 1, 1},
         {380, 180, 7, 1},
