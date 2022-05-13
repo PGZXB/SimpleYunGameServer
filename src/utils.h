@@ -138,7 +138,7 @@ using EventQueue = moodycamel::ConcurrentQueue<Event::Event>;
 using TaskQueue = moodycamel::ConcurrentQueue<std::function<void()>>;
 
 constexpr const std::size_t DOUBLE2INT_FACTOR = 1000;
-constexpr const std::size_t FPS = 40;
+constexpr const std::size_t FPS = 60;
 
 inline Json make_response_json_data(ErrCode err_code, const Json &data) {
     // {

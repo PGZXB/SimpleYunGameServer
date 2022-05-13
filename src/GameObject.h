@@ -159,7 +159,7 @@ private:
     int type_{0};
     State state_{DEFAULT};
     ResourceID surface_img_id_{-1};
-    AABB aabb_; // Oriented Bounding Box
+    AABB aabb_; // AA Bounding Box
     Vec2 velocity_{};
     std::shared_ptr<GameObjectController> controller_{nullptr};
     EventQueue event_queue_;

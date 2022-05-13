@@ -94,11 +94,24 @@ public:
         pending_tasks_.enqueue(task);        
     }
 
+    void visit_all_game_objects(const std::function<void(std::shared_ptr<GameObject>)> &visitor) {
+        for (auto e : game_object_list_) {
+            visitor(e);
+        }
+    }
+
+    int count_game_object_by_type(int type) {
+        auto iter = go_counters_.find(type);
+        if (iter == go_counters_.end()) return 0;
+        return iter->second;
+    }
+
     void add_game_object(std::shared_ptr<GameObject> obj) {
         // Check: must in loop
         std::lock_guard<std::mutex> _(mu_);
         obj->set_id(game_object_counter_++);
         game_object_list_.push_back(obj);
+        ++go_counters_[obj->type()];
     }
     
     void set_background(GameObject&& obj) {
@@ -224,10 +237,10 @@ private:
                 }
 #endif
 
-
                 // Remove dead GOs
                 for (auto iter = game_object_list.begin(); iter != game_object_list.end(); ++iter) {
                     if ((*iter)->dead()) {
+                        --game->go_counters_[(*iter)->type()];
                         iter = game_object_list.erase(iter);
                     }
                 }
@@ -326,6 +339,7 @@ private:
     GameObject backgound_go_;
     std::mutex mu_;
     std::list<std::shared_ptr<GameObject>> game_object_list_;
+    std::unordered_map<int, int> go_counters_;
     ProcessEventCallback event_processor_{nullptr};
     DisplayCallback display_callback_{nullptr};
     EventQueue event_queue_;

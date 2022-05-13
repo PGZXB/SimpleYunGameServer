@@ -32,12 +32,12 @@ static auto get_reset_ws_chann_cmd(YGSContext *ygs_ctx) {
                     game->wait_game_loop();
 
                     PGYGS_LOG("Ref count of game={0}: {1}", human_friendly_game_id, game.use_count());
-                    auto removed = ygs_ctx->room_mgr.try_remove_object(ygs_ws_ctx->room->id());
-                    PGZXB_DEBUG_ASSERT(removed);
+                    [[maybe_unused]] auto removed = ygs_ctx->room_mgr.try_remove_object(ygs_ws_ctx->room->id());
+                    // PGZXB_DEBUG_ASSERT(removed);
                     removed = ygs_ctx->game_mgr.try_remove_object(game_id);
-                    PGZXB_DEBUG_ASSERT(removed);
+                    // PGZXB_DEBUG_ASSERT(removed);
                     PGYGS_LOG("Ref count of game={0}: {1}", human_friendly_game_id, game.use_count());
-                    PGZXB_DEBUG_ASSERT(game.use_count() == 1);
+                    // PGZXB_DEBUG_ASSERT(game.use_count() == 1);
                 } else {
                     auto removed = ygs_ctx->room_mgr.try_remove_object(ygs_ws_ctx->room->id());
                     PGZXB_DEBUG_ASSERT(removed);
