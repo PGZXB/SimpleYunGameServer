@@ -45,3 +45,6 @@
 
 .cache
 build
+build-PGYGSQtFrontend*
+qt/PGYGSQtFrontend/CMakeLists.txt.user
+qt/PGYGSQtFrontend/PGYGSQtFrontend.pro.user
